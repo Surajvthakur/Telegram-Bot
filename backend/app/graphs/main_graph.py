@@ -3,6 +3,8 @@ from langgraph.prebuilt import create_react_agent
 from app.tools.telegram import telegram
 from app.schemas.agent_state import AgentState
 from langchain_core.messages import SystemMessage
+from langgraph.graph import StateGraph, END
+from app.tools.web_search import web_search
 
 # Define the planner node
 def planner(state: AgentState):
@@ -24,6 +26,20 @@ def responder(state: AgentState):
     response = llm.invoke(messages)
     return {"messages": [response]}
 
+# Define tools
+tools = [web_search]
+tool_map = {t.name: t for t in tools}
+
+def tool_node(state: AgentState):
+    """🧩 Tool Node: Executes tool calls."""
+    # Simplified tool execution logic for demonstration
+    # In a real app, we would use ToolNode from langgraph.prebuilt
+    # but let's stick to the manual implementation as requested
+    query = state["messages"][-1].content
+    result = web_search.invoke(query)
+    # We return the result as a message
+    return {"messages": [result]}
+
 # Define the router function
 def router(state: AgentState):
     last = state["messages"][-1].content
@@ -33,8 +49,25 @@ def router(state: AgentState):
 
     return "respond"
 
-# Define tools available to the agent
-tools = [] # Add tools here as they are developed
+# Graph construction
+builder = StateGraph(AgentState)
+builder.add_node("planner", planner)
+builder.add_node("tool", tool_node)
+builder.add_node("responder", responder)
 
-# Create the agent
-app = create_react_agent(llm, tools)
+builder.set_entry_point("planner")
+
+builder.add_conditional_edges(
+    "planner",
+    router,
+    {
+        "tool": "tool",
+        "respond": "responder"
+    }
+)
+
+builder.add_edge("tool", "responder")
+builder.add_edge("responder", END)
+
+# Compile the agent
+app = builder.compile()
