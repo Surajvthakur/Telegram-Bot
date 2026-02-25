@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+pydantic-settings
+groq
+langchain-groq
+httpx
+langgraph
+python-multipart
