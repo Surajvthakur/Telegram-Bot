@@ -1,6 +1,7 @@
 import httpx
 from typing import Optional
 from app.core.config import settings
+from app.core.llm import get_completion
 
 class TelegramTool:
     def __init__(self):

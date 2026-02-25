@@ -19,6 +19,6 @@ def get_completion(prompt: str, model: str = "llama-3.1-8b-instant") -> str:
     }
     try:
         response = groq_client.chat.completions.create(**chat_complete_params)
-        return response.choices.message.content
+        return response.choices[0].message.content
     except Exception as e:
         return f"Error: {str(e)}"
