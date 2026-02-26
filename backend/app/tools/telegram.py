@@ -1,7 +1,7 @@
 import httpx
 from typing import Optional
 from app.core.config import settings
-from app.core.llm import get_completion
+from app.graphs.main_graph import run_agent
 
 class TelegramTool:
     def __init__(self):
@@ -32,9 +32,9 @@ class TelegramTool:
         chat_id: str, 
         user_message: str
     ) -> dict:
-        """Send LLM-powered response to Telegram chat."""
-        # Get LLM response
-        llm_response = get_completion(user_message)
+        """Send LLM-powered response via the LangGraph agent."""
+        # Route through the LangGraph agent (which has access to tools like web_search)
+        llm_response = run_agent(user_message)
         
         # Send via Telegram
         return await self.send_message(chat_id, llm_response)
