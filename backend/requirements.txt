@@ -8,3 +8,4 @@ langgraph
 python-multipart
 tavily-python
 redis
+chromadb
