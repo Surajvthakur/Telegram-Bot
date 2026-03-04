@@ -34,7 +34,7 @@ class TelegramTool:
     ) -> dict:
         """Send LLM-powered response via the LangGraph agent."""
         # Route through the LangGraph agent (which has access to tools like web_search)
-        llm_response = run_agent(user_message)
+        llm_response = run_agent(user_message, str(chat_id))
         
         # Send via Telegram
         return await self.send_message(chat_id, llm_response)
