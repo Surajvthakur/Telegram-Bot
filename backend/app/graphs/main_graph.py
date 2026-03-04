@@ -5,7 +5,9 @@ from app.tools.web_search import web_search
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage, AIMessage
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
+import threading
 from app.memory.short_term import memory_manager
+from app.memory.long_term import vector_memory
 
 # ──────────────────────────────────────────────
 # System Prompt
@@ -115,13 +117,29 @@ def run_agent(user_message: str, chat_id: str = "default_chat") -> str:
     """Run the LangGraph agent with a user message and return the final text response."""
     # Retrieve short-term memory
     recent_messages = memory_manager.get_messages(chat_id)
+    
+    # Retrieve long-term memory facts
+    long_term_facts = vector_memory.retrieve_memories(chat_id, user_message)
+    
     human_msg = HumanMessage(content=user_message)
     
+    # Prepend facts dynamically to the state by injecting them into a generic system message if present
+    messages_to_send = recent_messages + [human_msg]
+    if long_term_facts:
+        fact_msg = SystemMessage(content=f"Useful memories about this user for current context:\n{long_term_facts}")
+        messages_to_send = [fact_msg] + messages_to_send
+        
     # Inject memory and new query into graph
-    result = graph.invoke({"messages": recent_messages + [human_msg]})
+    result = graph.invoke({"messages": messages_to_send})
     final_message = result["messages"][-1]
     
-    # Save the interaction to memory
+    # Save the interaction to short-term memory
     memory_manager.save_messages(chat_id, [human_msg, final_message])
+    
+    # Extract facts for long-term memory in background
+    threading.Thread(
+        target=vector_memory.extract_and_store, 
+        args=(chat_id, user_message, final_message.content)
+    ).start()
     
     return final_message.content
