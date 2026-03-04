@@ -7,3 +7,4 @@ httpx
 langgraph
 python-multipart
 tavily-python
+redis

@@ -2,9 +2,10 @@ from app.core.llm import llm
 from app.schemas.agent_state import AgentState
 from app.tools.web_search import web_search
 
-from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
+from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage, AIMessage
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
+from app.memory.short_term import memory_manager
 
 # ──────────────────────────────────────────────
 # System Prompt
@@ -110,8 +111,17 @@ graph = builder.compile()
 # ──────────────────────────────────────────────
 # Public API
 # ──────────────────────────────────────────────
-def run_agent(user_message: str) -> str:
+def run_agent(user_message: str, chat_id: str = "default_chat") -> str:
     """Run the LangGraph agent with a user message and return the final text response."""
-    result = graph.invoke({"messages": [HumanMessage(content=user_message)]})
+    # Retrieve short-term memory
+    recent_messages = memory_manager.get_messages(chat_id)
+    human_msg = HumanMessage(content=user_message)
+    
+    # Inject memory and new query into graph
+    result = graph.invoke({"messages": recent_messages + [human_msg]})
     final_message = result["messages"][-1]
+    
+    # Save the interaction to memory
+    memory_manager.save_messages(chat_id, [human_msg, final_message])
+    
     return final_message.content
