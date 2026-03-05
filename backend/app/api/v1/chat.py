@@ -15,7 +15,7 @@ async def chat(request: ChatRequest):
         # wait, let's fix get_completion vs run_agent in chat.py
         # Actually it uses get_completion directly. Let's redirect it to run_agent so it also gets memory.
         from app.graphs.main_graph import run_agent
-        response = run_agent(request.message, chat_id="local_test_user")
+        response = run_agent(request.message, chat_id="test_rel")
         return {"response": response}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
