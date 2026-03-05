@@ -5,5 +5,7 @@ from langgraph.graph.message import add_messages
 class AgentState(TypedDict):
     messages: Annotated[List[BaseMessage], add_messages]
     long_term_memory: str
+    personality_context: str
+    emotion_context: str
     user_id: str
     next: str

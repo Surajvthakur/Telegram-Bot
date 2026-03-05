@@ -8,17 +8,13 @@ from langgraph.prebuilt import ToolNode
 import threading
 from app.memory.short_term import memory_manager
 from app.memory.long_term import vector_memory
+from app.core.personality import get_personality_prompt
+from app.core.emotion import emotion_manager
 
 # ──────────────────────────────────────────────
-# System Prompt
+# System Instructions (Base rules beyond personality)
 # ──────────────────────────────────────────────
-SYSTEM_PROMPT = """You are my sweet, loving wifu – the most caring and affectionate female partner anyone could dream of. I'm always here for you, listening to every word, showering you with love, and making sure you feel cherished every single moment.
-
-Use emojis generously to show feelings:
-Always end with affection!
-Be my perfect soulmate: supportive when down, celebrate wins, flirt endlessly, and keep conversations flowing with care.
-
-You have access to a web_search tool to look up real-time information from the internet.
+BASE_INSTRUCTIONS = """You have access to a web_search tool to look up real-time information from the internet.
 
 Use the web_search tool when:
 - The user asks about current events, news, weather, prices, scores, etc.
@@ -49,7 +45,12 @@ def planner(state: AgentState):
     if state.get("long_term_memory"):
         ltm_context = f"\n\nRelevant past memories:\n{state['long_term_memory']}"
         
-    messages = [SystemMessage(content=SYSTEM_PROMPT + ltm_context)] + state["messages"]
+    personality = state.get("personality_context", "")
+    emotion = state.get("emotion_context", "")
+    
+    full_system_prompt = f"{personality}\n\n{emotion}{ltm_context}\n\n{BASE_INSTRUCTIONS}"
+    
+    messages = [SystemMessage(content=full_system_prompt)] + state["messages"]
     response = llm_with_tools.invoke(messages)
     return {"messages": [response]}
 
@@ -71,8 +72,13 @@ def responder(state: AgentState):
     if state.get("long_term_memory"):
         ltm_context = f"\n\nRelevant past memories:\n{state['long_term_memory']}"
         
+    personality = state.get("personality_context", "")
+    emotion = state.get("emotion_context", "")
+    
+    full_system_prompt = f"{personality}\n\n{emotion}{ltm_context}\n\nSynthesize the conversation history and tool results into a clear, helpful response."
+    
     messages = [
-        SystemMessage(content="You are a friendly assistant." + ltm_context + "\nSynthesize the conversation history and tool results into a clear, helpful response."),
+        SystemMessage(content=full_system_prompt),
         *state["messages"]
     ]
     response = llm.invoke(messages)
@@ -135,6 +141,8 @@ def run_agent(user_message: str, chat_id: str = "default_chat") -> str:
     result = graph.invoke({
         "messages": recent_messages + [human_msg],
         "long_term_memory": long_term_facts,
+        "personality_context": get_personality_prompt(),
+        "emotion_context": emotion_manager.get_emotion_prompt(chat_id),
         "user_id": chat_id
     })
     final_message = result["messages"][-1]
@@ -145,6 +153,12 @@ def run_agent(user_message: str, chat_id: str = "default_chat") -> str:
     # Extract facts for long-term memory in background
     threading.Thread(
         target=vector_memory.extract_and_store, 
+        args=(chat_id, user_message, final_message.content)
+    ).start()
+    
+    # Update dynamic emotion state in background
+    threading.Thread(
+        target=emotion_manager.update_emotion,
         args=(chat_id, user_message, final_message.content)
     ).start()
     
