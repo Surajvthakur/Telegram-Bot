@@ -66,18 +66,31 @@ class VectorMemory:
         """
         prompt = f"""
 Extract any long-term factual statements about the user from the following conversation.
-Ignore short-term context, greetings, or temporary feelings.
-Only extract lasting facts, preferences, constraints, or identity markers (e.g., job, name, likes/dislikes).
+CRITICAL: To prevent database pollution, you must be extremely strict about what you extract.
+
+Store ONLY:
+- Preferences
+- Goals
+- Important events
+- Emotional states
+
+AVOID saving:
+- Small talk
+- Greetings
+- Trivial replies
+- Temporary feelings
+- Generic statements
 
 Conversation:
 User: {user_message}
 AI: {ai_response}
 
-If there are no long-term facts to extract, return exactly the word: NONE
+If there are no valid long-term facts to extract based on the strict criteria above, return exactly the word: NONE
 Otherwise, return the facts as a simple list separated by newlines, with no prefix or additional commentary.
 For example:
-User likes machine learning
-User is stressful about exams
+User prefers short explanations
+User wants to learn machine learning
+User is actively stressed about exams
 """
         try:
             extraction_result = get_completion(prompt)

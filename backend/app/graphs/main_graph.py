@@ -45,7 +45,11 @@ llm_with_tools = llm.bind_tools(tools)
 # ──────────────────────────────────────────────
 def planner(state: AgentState):
     """🧠 Planner: Thinks and decides whether to use tools or respond."""
-    messages = [SystemMessage(content=SYSTEM_PROMPT)] + state["messages"]
+    ltm_context = ""
+    if state.get("long_term_memory"):
+        ltm_context = f"\n\nRelevant past memories:\n{state['long_term_memory']}"
+        
+    messages = [SystemMessage(content=SYSTEM_PROMPT + ltm_context)] + state["messages"]
     response = llm_with_tools.invoke(messages)
     return {"messages": [response]}
 
@@ -63,8 +67,12 @@ tool_executor = ToolNode(tools)
 # ──────────────────────────────────────────────
 def responder(state: AgentState):
     """💬 Responder: Synthesizes everything into a final answer."""
+    ltm_context = ""
+    if state.get("long_term_memory"):
+        ltm_context = f"\n\nRelevant past memories:\n{state['long_term_memory']}"
+        
     messages = [
-        SystemMessage(content="You are a friendly assistant. Synthesize the conversation history and tool results into a clear, helpful response."),
+        SystemMessage(content="You are a friendly assistant." + ltm_context + "\nSynthesize the conversation history and tool results into a clear, helpful response."),
         *state["messages"]
     ]
     response = llm.invoke(messages)
@@ -123,14 +131,12 @@ def run_agent(user_message: str, chat_id: str = "default_chat") -> str:
     
     human_msg = HumanMessage(content=user_message)
     
-    # Prepend facts dynamically to the state by injecting them into a generic system message if present
-    messages_to_send = recent_messages + [human_msg]
-    if long_term_facts:
-        fact_msg = SystemMessage(content=f"Useful memories about this user for current context:\n{long_term_facts}")
-        messages_to_send = [fact_msg] + messages_to_send
-        
     # Inject memory and new query into graph
-    result = graph.invoke({"messages": messages_to_send})
+    result = graph.invoke({
+        "messages": recent_messages + [human_msg],
+        "long_term_memory": long_term_facts,
+        "user_id": chat_id
+    })
     final_message = result["messages"][-1]
     
     # Save the interaction to short-term memory
