@@ -16,13 +16,13 @@ class VectorMemory:
             name="long_term_memory"
         )
         
-    def save_memory(self, chat_id: str, fact: str):
+    def save_memory(self, chat_id: str, fact: str, type_cat: str = "memory"):
         """Save a new fact into the vector database with metadata."""
         memory_id = str(uuid.uuid4())
         
         metadata = {
             "user_id": str(chat_id),
-            "type": "memory",
+            "type": type_cat,
             "timestamp": datetime.datetime.now().isoformat()
         }
         
@@ -45,15 +45,20 @@ class VectorMemory:
                 where={"user_id": str(chat_id)}
             )
             
-            # Extract documents from results
+            # Extract documents and metadata from results
             documents = results.get('documents', [[]])[0]
+            metadatas = results.get('metadatas', [[]])[0]
             
             if not documents:
                 return ""
             
-            # Format as a bulleted list
-            formatted_memories = "\n".join([f"- {doc}" for doc in documents])
-            return formatted_memories
+            # Format as a bulleted list including the type category
+            formatted_memories = []
+            for doc, meta in zip(documents, metadatas):
+                cat = meta.get("type", "memory") if meta else "memory"
+                formatted_memories.append(f"- [{cat.upper()}] {doc}")
+                
+            return "\n".join(formatted_memories)
             
         except Exception as e:
             print(f"Error retrieving long-term memory for chat {chat_id}: {e}")
@@ -68,42 +73,46 @@ class VectorMemory:
 Extract any long-term factual statements about the user from the following conversation.
 CRITICAL: To prevent database pollution, you must be extremely strict about what you extract.
 
-Store ONLY:
-- Preferences
-- Goals
-- Important events
-- Emotional states
+Categorize each extracted fact into one of these strict types:
+- user_profile (Name, age, location, job)
+- preferences (Likes, dislikes, hobbies)
+- shared_moments (Significant things you did together)
+- emotions (Long-lasting emotional states or fears)
+- events (Important upcoming or past life events)
 
 AVOID saving:
-- Small talk
-- Greetings
-- Trivial replies
-- Temporary feelings
-- Generic statements
+- Small talk, greetings, trivial replies, temporary feelings
 
 Conversation:
 User: {user_message}
 AI: {ai_response}
 
-If there are no valid long-term facts to extract based on the strict criteria above, return exactly the word: NONE
-Otherwise, return the facts as a simple list separated by newlines, with no prefix or additional commentary.
-For example:
-User prefers short explanations
-User wants to learn machine learning
-User is actively stressed about exams
+If there are no valid long-term facts, return exactly: NONE
+Otherwise, return ONLY a valid JSON array of objects. Do not wrap in markdown tags. Example:
+[
+  {{"type": "user_profile", "content": "User is a software engineer"}},
+  {{"type": "preferences", "content": "User loves machine learning"}}
+]
 """
         try:
             extraction_result = get_completion(prompt)
             extraction_result = extraction_result.strip()
             
             if extraction_result and extraction_result.upper() != "NONE":
-                # Split by newline just in case there are multiple facts
-                facts = [f.strip() for f in extraction_result.split("\n") if f.strip() and not f.strip().startswith("Here are")]
-                for fact in facts:
-                    # Remove common markdown bullet points if present
-                    clean_fact = fact.lstrip("- *").strip()
-                    if clean_fact:
-                        self.save_memory(chat_id, clean_fact)
+                import re
+                import json
+                
+                # Extract JSON array
+                json_match = re.search(r'\[.*\]', extraction_result, re.DOTALL)
+                if json_match:
+                    facts_array = json.loads(json_match.group(0))
+                    for item in facts_array:
+                        fact_type = item.get("type", "memory")
+                        fact_content = item.get("content", "").strip()
+                        if fact_content:
+                            self.save_memory(chat_id, fact_content, fact_type)
+                else:
+                    print(f"[Long-Term Memory] LLM did not return a valid JSON array: {extraction_result}")
         except Exception as e:
             print(f"Error extracting long-term memory for chat {chat_id}: {e}")
 
