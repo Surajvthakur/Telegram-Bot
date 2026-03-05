@@ -10,6 +10,7 @@ from app.memory.short_term import memory_manager
 from app.memory.long_term import vector_memory
 from app.core.personality import get_personality_prompt
 from app.core.emotion import emotion_manager
+from app.core.relationship import relationship_manager
 
 # ──────────────────────────────────────────────
 # System Instructions (Base rules beyond personality)
@@ -47,8 +48,9 @@ def planner(state: AgentState):
         
     personality = state.get("personality_context", "")
     emotion = state.get("emotion_context", "")
+    relationship = state.get("relationship_context", "")
     
-    full_system_prompt = f"{personality}\n\n{emotion}{ltm_context}\n\n{BASE_INSTRUCTIONS}"
+    full_system_prompt = f"{personality}\n\n{relationship}\n{emotion}{ltm_context}\n\n{BASE_INSTRUCTIONS}"
     
     messages = [SystemMessage(content=full_system_prompt)] + state["messages"]
     response = llm_with_tools.invoke(messages)
@@ -74,8 +76,9 @@ def responder(state: AgentState):
         
     personality = state.get("personality_context", "")
     emotion = state.get("emotion_context", "")
+    relationship = state.get("relationship_context", "")
     
-    full_system_prompt = f"{personality}\n\n{emotion}{ltm_context}\n\nSynthesize the conversation history and tool results into a clear, helpful response."
+    full_system_prompt = f"{personality}\n\n{relationship}\n{emotion}{ltm_context}\n\nSynthesize the conversation history and tool results into a clear, helpful response."
     
     messages = [
         SystemMessage(content=full_system_prompt),
@@ -142,6 +145,7 @@ def run_agent(user_message: str, chat_id: str = "default_chat") -> str:
         "messages": recent_messages + [human_msg],
         "long_term_memory": long_term_facts,
         "personality_context": get_personality_prompt(),
+        "relationship_context": relationship_manager.get_relationship_prompt(chat_id),
         "emotion_context": emotion_manager.get_emotion_prompt(chat_id),
         "user_id": chat_id
     })
@@ -160,6 +164,12 @@ def run_agent(user_message: str, chat_id: str = "default_chat") -> str:
     threading.Thread(
         target=emotion_manager.update_emotion,
         args=(chat_id, user_message, final_message.content)
+    ).start()
+    
+    # Update dynamic relationship metadata in background
+    threading.Thread(
+        target=relationship_manager.update_relationship,
+        args=(chat_id,)
     ).start()
     
     return final_message.content

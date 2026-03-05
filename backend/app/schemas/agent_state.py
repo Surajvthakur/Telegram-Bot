@@ -7,5 +7,6 @@ class AgentState(TypedDict):
     long_term_memory: str
     personality_context: str
     emotion_context: str
+    relationship_context: str
     user_id: str
     next: str
