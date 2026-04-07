@@ -35,6 +35,19 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # ── Ngrok Tunnel ─────────────────────────────────
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: telegram-bot-ngrok
+    ports:
+      - "4040:4040"
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+    command: http backend:8000
+    depends_on:
+      - backend
+    restart: unless-stopped
+
 volumes:
   redis_data:
   chroma_data:
